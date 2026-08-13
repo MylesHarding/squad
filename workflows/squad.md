@@ -34,6 +34,7 @@ permissions:
 network:
   allowed:
     - defaults
+    - api.anthropic.com
 imports:
   - shared/squad.md
   - shared/planning-ontology.md

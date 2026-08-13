@@ -61,13 +61,52 @@ and opens a PR with the result.
 
 | Requirement | Details |
 |-------------|---------|
-| GitHub repo with Copilot | Copilot must be enabled for the repository |
 | `gh` CLI | [Install the GitHub CLI](https://cli.github.com/) and authenticate with `gh auth login` |
 | `gh aw` extension | `gh extension install github/gh-aw` |
+| An engine credential | The default engine is **Claude Code** (`engine: id: claude`), which needs an `ANTHROPIC_API_KEY` repository secret — see [Configure the engine](#configure-the-engine) below. If you switch to the `copilot` engine instead, Copilot must be enabled for the repository. |
 
 ---
 
 ## Setup
+
+### Configure the engine
+
+Squad's workflows (`squad.md`, `squad-implement-worker.md`) run on gh-aw's `engine:`
+field, which selects the AI engine that executes each workflow run. As of this fork, the
+default is **Claude Code** (`engine: id: claude`) — the source `.md` files ship with:
+
+```yaml
+engine:
+  id: claude
+  env:
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+network:
+  allowed:
+    - defaults
+    - api.anthropic.com
+```
+
+Set `ANTHROPIC_API_KEY` under **Settings → Secrets and variables → Actions → Secrets**
+before compiling, or every workflow run will fail at the engine step.
+
+**To use a different engine** (`copilot` or `codex` are gh-aw's other natively supported
+options — `grok` is not yet supported by gh-aw, see the [engines reference](https://github.github.com/gh-aw/reference/engines/)),
+edit the `engine:` block in your local copy of `squad.md`/`squad-implement-worker.md`
+*before* running `gh aw compile` — `engine` is resolved at compile time, baked into the
+generated `.lock.yml`, and cannot be switched at workflow-run time via a variable. For
+example, to use Copilot instead:
+
+```yaml
+engine:
+  id: copilot
+network:
+  allowed:
+    - defaults
+```
+
+(Copilot doesn't need the `api.anthropic.com`/`ANTHROPIC_API_KEY` additions, but does need
+Copilot enabled for the repository and the `copilot-requests: write` permission already
+present in these workflow files.)
 
 ### Allow workflow-created pull requests
 

@@ -32,6 +32,7 @@ concurrency:
 network:
   allowed:
     - defaults
+    - api.anthropic.com
 imports:
   - shared/squad.md
 tools:

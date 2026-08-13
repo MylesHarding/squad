@@ -54,15 +54,25 @@
 #   proxy resolves aliases based on model availability, so if the chosen model
 #   is unavailable the proxy walks a fallback chain automatically.
 #
+# Engine: defaults to Claude Code (`id: claude`). Requires an `ANTHROPIC_API_KEY`
+# repository secret — see the gh-aw setup guide. gh-aw's `engine.agent` field
+# (which loads a custom agent file for the `copilot` engine) has no equivalent for
+# `claude` — Claude auto-discovers `CLAUDE.md` in the workspace instead, so the
+# "Generate CLAUDE.md from the coordinator agent file" step below produces one from
+# the same source (`.github/agents/squad.agent.md`, minus its frontmatter) so the
+# coordinator persona loads correctly regardless of engine. To use a different
+# engine, edit `id:` here (and `network.allowed` / secrets in the importing
+# workflow) — see docs/src/content/docs/guide/gh-aw.md#configure-the-engine.
+#
 # State backend is pinned to `local`: the compiled agent invocation passes
 # `--disable-builtin-mcps`, so Squad's `state-mcp` bridge does not load. A non-local
 # backend would fail silently. If a committed .squad/team.md with roster entries
 # exists (e.g. from a previous /squad cast), init is skipped to preserve it.
 model: ${{ vars.SQUAD_MODEL || 'auto' }}
 engine:
-  id: copilot
-  version: 1.0.78
-  agent: squad
+  id: claude
+  env:
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
 jobs:
   activation:
@@ -90,6 +100,30 @@ jobs:
             npx --yes "@bradygaster/squad-cli@${SQUAD_CLI_VERSION:-0.11.0}" init --preset default --state-backend local
           fi
 
+      - name: Generate CLAUDE.md from the coordinator agent file
+        if: success()
+        run: |
+          # gh-aw's `claude` engine has no equivalent to Copilot's `engine.agent`
+          # (which loads .github/agents/squad.agent.md directly) — Claude instead
+          # auto-discovers a CLAUDE.md in the workspace. Derive one from the same
+          # source so the coordinator persona is identical across engines: strip
+          # the YAML frontmatter (name/description/tools — Copilot-agent-specific,
+          # meaningless to Claude's auto-discovery) and keep the markdown body.
+          if [ -f ".github/agents/squad.agent.md" ]; then
+            # Only the very first line opens frontmatter and the next bare `---`
+            # closes it — later `---` lines are markdown dividers in the body and
+            # must be preserved, not eaten.
+            awk '
+              NR == 1 && /^---$/ { fm = 1; next }
+              fm == 1 && /^---$/ { fm = 0; next }
+              fm == 1 { next }
+              { print }
+            ' .github/agents/squad.agent.md > CLAUDE.md
+            echo "✓ Generated CLAUDE.md from .github/agents/squad.agent.md"
+          else
+            echo "⚠ .github/agents/squad.agent.md not found — skipping CLAUDE.md generation"
+          fi
+
       - name: Upload Squad state artifact
         if: success()
         uses: actions/upload-artifact@v7.0.1
@@ -99,6 +133,7 @@ jobs:
           path: |
             .squad
             .github/agents/squad.agent.md
+            CLAUDE.md
           if-no-files-found: error
           retention-days: 1
 
@@ -134,10 +169,11 @@ agent sandbox:
 
 ## Working with Squad
 
-Squad's team state (`.squad/`) and its Copilot custom agent
-(`.github/agents/squad.agent.md`) were initialized during activation and restored
-into this checkout before you started — do **not** install Squad or run `squad init`
-yourself.
+Squad's team state (`.squad/`), its Copilot custom agent
+(`.github/agents/squad.agent.md`), and a generated `CLAUDE.md` (same coordinator
+persona, for engines that auto-discover CLAUDE.md instead of using `engine.agent`)
+were initialized during activation and restored into this checkout before you
+started — do **not** install Squad or run `squad init` yourself.
 
 - Verify `.squad/team.md` exists before delegating work to the team. If it is
   missing, the activation-job bootstrap step failed — call `noop` and explain
