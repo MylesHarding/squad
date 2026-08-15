@@ -26,10 +26,20 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: ${{ secrets.ABLY_API_KEY_PUBLISH != '' }}
     steps:
+      # A job-level `if:` referencing `secrets` directly fails GitHub's own workflow_dispatch
+      # pre-validation outright ("Unrecognized named-value: 'secrets'", confirmed live) —
+      # apparently that context isn't available at dispatch-time static validation, only
+      # once a run actually starts. A step-output-based guard has no such restriction.
+      - name: Check for Ably key
+        id: check
+        env:
+          KEY: ${{ secrets.ABLY_API_KEY_PUBLISH }}
+        run: echo "configured=$([ -n "$KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
       - name: Build payload
         id: payload
+        if: steps.check.outputs.configured == 'true'
         env:
           EVENT_NAME: ${{ github.event_name }}
           ACTION: ${{ github.event.action }}
@@ -43,6 +53,7 @@ jobs:
           echo "data-json=$data" >> "$GITHUB_OUTPUT"
 
       - name: Publish to Ably
+        if: steps.check.outputs.configured == 'true'
         uses: MylesHarding/squad/.github/actions/ably-publish@main
         with:
           ably-api-key: ${{ secrets.ABLY_API_KEY_PUBLISH }}
