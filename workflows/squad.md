@@ -107,7 +107,7 @@ safe-outputs:
     max: 3
   actions:
     publish-progress:
-      uses: MylesHarding/squad/.github/actions/ably-publish@main
+      uses: MylesHarding/squad/.github/actions/ably-publish@dev
       env:
         ably-api-key: ${{ secrets.ABLY_API_KEY_PUBLISH }}
         channel: squad-progress

@@ -54,7 +54,7 @@ jobs:
 
       - name: Publish to Ably
         if: steps.check.outputs.configured == 'true'
-        uses: MylesHarding/squad/.github/actions/ably-publish@main
+        uses: MylesHarding/squad/.github/actions/ably-publish@dev
         with:
           ably-api-key: ${{ secrets.ABLY_API_KEY_PUBLISH }}
           channel: ${{ vars.SQUAD_ABLY_CHANNEL || 'squad-watch' }}
