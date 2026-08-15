@@ -1,0 +1,43 @@
+name: Publish to Ably
+description: >
+  Publishes one message to an Ably channel via the REST API. Shared by any workflow in this
+  repo that needs to push a realtime event — write the curl+jq once, reuse it everywhere,
+  instead of every ad-hoc workflow reinventing its own copy. Mounted into squad.md's
+  safe-outputs.actions as a callable tool so the agent itself can emit progress updates
+  mid-run (see workflows/squad.md) — also usable as a plain step by any other workflow in
+  this repo the same way ntsy-forge's own .github/actions/ably-publish is used.
+
+inputs:
+  ably-api-key:
+    description: >
+      A publish-scoped Ably API key. Pass it from a secret in the calling workflow
+      (e.g. ${{ secrets.ABLY_API_KEY_PUBLISH }}) — composite actions can't read repo
+      secrets directly, only what the caller explicitly passes in.
+    required: true
+  channel:
+    description: Ably channel name to publish to.
+    required: true
+  event-name:
+    description: The Ably message "name" field (e.g. "issue-event").
+    required: true
+  data-json:
+    description: The message's "data" field, as a JSON string (already-encoded, not an object).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Publish
+      shell: bash
+      env:
+        ABLY_API_KEY: ${{ inputs.ably-api-key }}
+        CHANNEL: ${{ inputs.channel }}
+        EVENT_NAME: ${{ inputs.event-name }}
+        DATA_JSON: ${{ inputs.data-json }}
+      run: |
+        payload="$(jq -nc --arg name "$EVENT_NAME" --argjson data "$DATA_JSON" '{name: $name, data: $data}')"
+        curl -sf -X POST \
+          "https://rest.ably.io/channels/$CHANNEL/messages" \
+          -u "$ABLY_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d "$payload"

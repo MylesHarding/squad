@@ -105,6 +105,12 @@ safe-outputs:
   dispatch-workflow:
     workflows: [squad-implement-worker]
     max: 3
+  actions:
+    publish-progress:
+      uses: MylesHarding/squad/.github/actions/ably-publish@main
+      env:
+        ably-api-key: ${{ secrets.ABLY_API_KEY_PUBLISH }}
+        channel: squad-progress
 ---
 
 ## Planning Artifact Data Contract (all modes)
@@ -188,6 +194,20 @@ Repository owners must configure Copilot setup steps separately when needed.
    - `cast-member` (1), `plan` (1), `cast`, `connect`, `adopt`, `retire`, `status`, `research`, `triage`, `implement`
 4. Default to `cast` if empty.
 5. **Phase selector:** If remaining args contain `phase {N}`, extract N.
+
+## Progress Updates (optional, best-effort)
+
+`publish-progress` is a mounted tool that pushes one realtime event to the adopting repo's
+Ably channel `squad-progress` — for a dashboard or other live monitor watching this run to
+show what's happening before the final comment/PR lands, not for anything this workflow
+itself depends on. Call it with `event-name: "squad-progress"` and `data-json` containing at
+minimum `{"mode": "{mode}", "origin_issue": {issue_number}, "status": "{short status}"}`.
+Reasonable moments to call it: right after posting the mode's acknowledgment comment, at the
+start of each major step in a multi-step mode (Epic Dispatch's per-child loop, Plan
+Activate's per-issue creation loop), and once more just before the final deliverable posts.
+**This tool requires the adopting repo to have `ABLY_API_KEY_PUBLISH` configured — if it's
+absent, the call fails.** Treat every call as best-effort: a failure here is never a reason
+to stop, retry, or skip the actual mode's work — note it happened (if at all) and continue.
 
 ## Execute Mode
 
@@ -489,6 +509,9 @@ Never call the generic `dispatch_workflow` tool. Never emit a dispatch without a
 non-empty numeric `issue_number`. Emit exactly one workflow-specific dispatch
 per selected child, and only report a child as dispatched after the tool returns
 success.
+
+After each successful dispatch, best-effort call `publish-progress` (see Progress Updates
+above) with `data-json` like `{"mode": "implement", "origin_issue": {epic_number}, "status": "dispatched child #{child-issue-number}"}`.
 
 Post a comment on the epic listing the dispatched children, blocked children,
 children with existing implementation pull requests, and any ready children
@@ -963,6 +986,12 @@ Root → Epics → Tasks. Phase-specific: filter to matching phase heading.
 > **⚠️ ATOMIC CONTRACT — strictly one task at a time:**
 > For each task: compose ONLY that task's body → call `create-issue` immediately → verify the returned issue number → then move to the next task.
 > **DO NOT** compose or buffer multiple task bodies before making calls. One compose → one call → one verify, repeated per task.
+
+This loop can run long (up to 50 issues). After each verified task, best-effort call
+`publish-progress` with `data-json` like `{"mode": "plan-activate", "origin_issue":
+{root_issue_number}, "status": "created task {N} of {M}: #{issue_number}"}` — gives a live
+monitor something to show during a run that otherwise produces no visible output until the
+very end.
 
 - Title: task title
 - Labels: `squad` (0075ca), `squad:{agent}` (e4e669). No `size:*` labels unless policy says so.
