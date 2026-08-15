@@ -10,9 +10,13 @@ description: >
 inputs:
   ably-api-key:
     description: >
-      A publish-scoped Ably API key. Pass it from a secret in the calling workflow
-      (e.g. ${{ secrets.ABLY_API_KEY_PUBLISH }}) — composite actions can't read repo
-      secrets directly, only what the caller explicitly passes in.
+      A publish-scoped Ably API key. Pass it from a secret in the calling workflow, e.g.
+      secrets dot ABLY_API_KEY_PUBLISH — composite actions can't read repo secrets
+      directly, only what the caller explicitly passes in. (Deliberately not written as a
+      real expression here: GitHub's parser evaluates any dollar-brace-brace pattern
+      anywhere in this file as a literal expression, even inside a description string —
+      confirmed live in ntsy-forge's copy of this same file, this exact text broke a real
+      workflow run with "Unrecognized named-value: secrets".)
     required: true
   channel:
     description: Ably channel name to publish to.

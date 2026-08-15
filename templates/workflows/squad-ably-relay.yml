@@ -19,6 +19,9 @@ name: Squad Ably Relay
 on:
   issues:
   pull_request:
+  # Manual trigger for controlled connectivity testing (e.g. verifying a freshly-set
+  # ABLY_API_KEY_PUBLISH actually works end to end) — no issue/PR event needed.
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -34,8 +37,8 @@ jobs:
         run: |
           data="$(jq -nc \
             --arg entity "$EVENT_NAME" \
-            --arg action "$ACTION" \
-            --argjson number "$NUMBER" \
+            --arg action "${ACTION:-manual-dispatch}" \
+            --argjson number "${NUMBER:-null}" \
             '{entity: $entity, action: $action, number: $number}')"
           echo "data-json=$data" >> "$GITHUB_OUTPUT"
 
