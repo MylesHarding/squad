@@ -44,6 +44,14 @@ export interface WatchConfig {
   stateBackend?: StateBackendType;
   /** Pre-resolved state context from CLI entry (avoids redundant resolution). */
   stateContext?: SquadStateContext | null;
+  /**
+   * Ably channel to subscribe to for push-triggered rounds (see ably-trigger.ts). The API
+   * key itself is never configured here — only via the ABLY_API_KEY environment variable,
+   * consistent with keeping secrets out of committed config. Defaults to "squad-watch" so
+   * a fresh install works with zero config once ABLY_API_KEY is set and the adopting repo
+   * has installed squad-ably-relay.yml with a matching channel.
+   */
+  ablyChannel?: string;
 }
 
 const DEFAULTS: WatchConfig = {
@@ -53,6 +61,7 @@ const DEFAULTS: WatchConfig = {
   timeout: 30,
   dispatchMode: undefined,
   capabilities: {},
+  ablyChannel: 'squad-watch',
 };
 
 /**
@@ -103,6 +112,7 @@ export function loadWatchConfig(
     sentinelFile: cliOverrides.sentinelFile ?? fileConfig.sentinelFile,
     stateBackend: cliOverrides.stateBackend ?? fileConfig.stateBackend,
     stateContext: cliOverrides.stateContext,
+    ablyChannel: cliOverrides.ablyChannel ?? fileConfig.ablyChannel ?? DEFAULTS.ablyChannel,
   };
 
   // Default to --yolo when execute mode is active and no flags were set.
@@ -132,6 +142,7 @@ function normalizeFileConfig(raw: Record<string, unknown>): Partial<WatchConfig>
     }
   }
   if (typeof raw['logFile'] === 'string') result.logFile = raw['logFile'];
+  if (typeof raw['ablyChannel'] === 'string') result.ablyChannel = raw['ablyChannel'];
   if (typeof raw['authUser'] === 'string') result.authUser = raw['authUser'];
   if (typeof raw['notifyLevel'] === 'string') {
     const level = raw['notifyLevel'];
@@ -152,7 +163,7 @@ function normalizeFileConfig(raw: Record<string, unknown>): Partial<WatchConfig>
 
   // Everything else is a capability key
   const caps: Record<string, boolean | Record<string, unknown>> = {};
-  const reserved = new Set(['interval', 'execute', 'maxConcurrent', 'timeout', 'copilotFlags', 'agentCmd', 'verbose', 'dispatchMode', 'logFile', 'authUser', 'notifyLevel', 'overnightStart', 'overnightEnd', 'sentinelFile', 'stateBackend']);
+  const reserved = new Set(['interval', 'execute', 'maxConcurrent', 'timeout', 'copilotFlags', 'agentCmd', 'verbose', 'dispatchMode', 'logFile', 'authUser', 'notifyLevel', 'overnightStart', 'overnightEnd', 'sentinelFile', 'stateBackend', 'ablyChannel']);
   for (const [key, value] of Object.entries(raw)) {
     if (reserved.has(key)) continue;
     if (typeof value === 'boolean' || (typeof value === 'object' && value !== null && !Array.isArray(value))) {

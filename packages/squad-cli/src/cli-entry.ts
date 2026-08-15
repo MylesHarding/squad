@@ -201,6 +201,9 @@ async function main(): Promise<void> {
     console.log(`                    --decision-hygiene auto-merge decision inbox`);
     console.log(`             Disable: --no-<capability> overrides config.json`);
     console.log(`             Logging: --log-file <path> tee output to file with timestamps`);
+    console.log(`             Push:    --ably-channel <name> (default "squad-watch") — set ABLY_API_KEY to`);
+    console.log(`                    react to push events instead of polling every --interval; falls`);
+    console.log(`                    back to polling automatically if unset or the connection fails`);
     console.log(`  ${BOLD}loop${RESET}       Prompt-driven continuous work loop`);
     console.log(`             Usage: loop [--init] [--file <path>] [--interval <min>]`);
     console.log(`             Reads loop.md and runs it each cycle (no issues needed)`);
@@ -611,6 +614,11 @@ async function main(): Promise<void> {
       ? args[logFileIdx + 1]
       : undefined;
 
+    const ablyChannelIdx = args.indexOf('--ably-channel');
+    const ablyChannel = (ablyChannelIdx !== -1 && args[ablyChannelIdx + 1])
+      ? args[ablyChannelIdx + 1]
+      : undefined;
+
     const authUserIdx = args.indexOf('--auth-user');
     const authUser = (authUserIdx !== -1 && args[authUserIdx + 1])
       ? args[authUserIdx + 1]
@@ -704,6 +712,7 @@ async function main(): Promise<void> {
       sentinelFile,
       stateBackend: mappedBackend,
       stateContext,
+      ablyChannel,
       capabilities: Object.keys(capabilities).length > 0 ? capabilities : undefined,
     });
 
@@ -711,7 +720,7 @@ async function main(): Promise<void> {
     // Skip values that follow known value-flags (e.g. "--interval 5" → "5" is not positional).
     const knownValueFlags = new Set([
       '--interval', '--copilot-flags', '--agent-cmd', '--max-concurrent', '--timeout', '--board-project', '--board-owner', '--auth-user',
-      '--dispatch-mode', '--log-file', '--notify-level', '--overnight-start', '--overnight-end', '--sentinel-file', '--state-backend',
+      '--dispatch-mode', '--log-file', '--notify-level', '--overnight-start', '--overnight-end', '--sentinel-file', '--state-backend', '--ably-channel',
     ]);
     const watchArgStart = args.indexOf(cmd) + 1;
     const watchArgs = args.slice(watchArgStart);

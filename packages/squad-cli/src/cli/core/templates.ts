@@ -337,6 +337,12 @@ export const TEMPLATE_MANIFEST: TemplateFile[] = [
   
   // Workflows (squad-owned, overwrite on upgrade)
   {
+    source: 'workflows/squad-ably-relay.yml',
+    destination: '../.github/workflows/squad-ably-relay.yml',
+    overwriteOnUpgrade: true,
+    description: 'Squad Ably relay workflow — optional, only runs if ABLY_API_KEY_PUBLISH is configured',
+  },
+  {
     source: 'workflows/squad-ci.yml',
     destination: '../.github/workflows/squad-ci.yml',
     overwriteOnUpgrade: true,

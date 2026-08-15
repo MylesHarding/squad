@@ -25,6 +25,7 @@ import {
 import { RalphMonitor } from '@bradygaster/squad-sdk/ralph';
 import { EventBus } from '@bradygaster/squad-sdk/runtime/event-bus';
 import { ghAvailable, ghAuthenticated, ghRateLimitCheck, isRateLimitError } from '../../core/gh-cli.js';
+import { startAblyTrigger, resolveAblyApiKey } from './ably-trigger.js';
 import type { MachineCapabilities } from '@bradygaster/squad-sdk/ralph/capabilities';
 import {
   PredictiveCircuitBreaker,
@@ -814,7 +815,7 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
   const modeTag = config.execute ? ` ${BOLD}(Execute)${RESET}` : '';
   const platformTag = ` [${adapter.type}]`;
   console.log(`\n${BOLD}🔄 Ralph — Watch Mode${RESET}${modeTag}${platformTag}`);
-  console.log(`${DIM}Polling every ${interval} minute(s) for squad work. Ctrl+C to stop.${RESET}`);
+  console.log(`${DIM}Ctrl+C to stop. Falls back to polling every ${interval} minute(s) unless ABLY_API_KEY is set for push-triggered rounds.${RESET}`);
   if (config.execute && config.copilotFlags) {
     console.log(`${DIM}Copilot flags: ${config.copilotFlags}${RESET}`);
   }
@@ -991,42 +992,70 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
     vlog.log(`Round ${round} complete (${elapsed}s)`);
   }
 
-  // Run immediately, then on interval
+  // Run immediately, then push-triggered (Ably) if configured, falling back to interval
+  // polling otherwise. Never both at once — see ably-trigger.ts.
   await executeRound();
 
+  async function guardedRound(): Promise<void> {
+    if (roundInProgress) return;
+    roundInProgress = true;
+    try {
+      await executeRound();
+    } catch (e) {
+      const err = e as Error;
+      if (adapter.type === 'github' && isRateLimitError(err)) {
+        cbState.status = 'open';
+        cbState.openedAt = new Date().toISOString();
+        cbState.consecutiveFailures++;
+        cbState.consecutiveSuccesses = 0;
+        cbState.cooldownMinutes = Math.min(cbState.cooldownMinutes * 2, 30);
+        saveCBState(squadDirInfo.path, cbState);
+        console.log(`${RED}🛑${RESET} Rate limited — circuit opened, cooldown ${cbState.cooldownMinutes}m`);
+      } else {
+        console.error(`${RED}✗${RESET} Round error: ${err.message}`);
+      }
+    } finally {
+      roundInProgress = false;
+    }
+  }
+
   return new Promise<void>((resolve) => {
-    const intervalId = setInterval(
-      async () => {
-        if (roundInProgress) return;
-        roundInProgress = true;
-        try {
-          await executeRound();
-        } catch (e) {
-          const err = e as Error;
-          if (adapter.type === 'github' && isRateLimitError(err)) {
-            cbState.status = 'open';
-            cbState.openedAt = new Date().toISOString();
-            cbState.consecutiveFailures++;
-            cbState.consecutiveSuccesses = 0;
-            cbState.cooldownMinutes = Math.min(cbState.cooldownMinutes * 2, 30);
-            saveCBState(squadDirInfo.path, cbState);
-            console.log(`${RED}🛑${RESET} Rate limited — circuit opened, cooldown ${cbState.cooldownMinutes}m`);
-          } else {
-            console.error(`${RED}✗${RESET} Round error: ${err.message}`);
-          }
-        } finally {
-          roundInProgress = false;
+    let intervalId: NodeJS.Timeout | undefined;
+    let ablyTrigger: Awaited<ReturnType<typeof startAblyTrigger>> | null = null;
+
+    function startPollingFallback(reason: string): void {
+      if (intervalId) return; // idempotent — may be called from both the initial
+                               // resolveAblyApiKey() check and a later connection failure
+      console.log(`${DIM}Polling every ${interval} minute(s) for squad work (${reason}). Ctrl+C to stop.${RESET}`);
+      intervalId = setInterval(guardedRound, interval * 60 * 1000);
+    }
+
+    if (resolveAblyApiKey()) {
+      ablyTrigger = startAblyTrigger({
+        channel: config.ablyChannel ?? 'squad-watch',
+        onEvent: () => { void guardedRound(); },
+        log: (msg) => console.log(`${DIM}${msg}${RESET}`),
+        logError: (msg) => console.error(`${YELLOW}⚠${RESET} ${msg}`),
+      });
+      console.log(`${DIM}Connecting to Ably for push-triggered rounds...${RESET}`);
+      void ablyTrigger?.ready.then((ok) => {
+        if (ok) {
+          console.log(`${GREEN}✓${RESET} Push-triggered — no polling interval running.`);
+        } else {
+          startPollingFallback('Ably connection failed');
         }
-      },
-      interval * 60 * 1000,
-    );
+      });
+    } else {
+      startPollingFallback('no ABLY_API_KEY configured');
+    }
 
     // Graceful shutdown
     let isShuttingDown = false;
     const shutdown = async () => {
       if (isShuttingDown) return;
       isShuttingDown = true;
-      clearInterval(intervalId);
+      if (intervalId) clearInterval(intervalId);
+      await ablyTrigger?.stop();
       process.off('SIGINT', shutdown);
       process.off('SIGTERM', shutdown);
       await eventBus.emit({

@@ -149,6 +149,10 @@ squad watch                    # polls every 10 minutes (default)
 squad watch --interval 5       # polls every 5 minutes
 squad watch --interval 30      # polls every 30 minutes
 ```
+Set `ABLY_API_KEY` and Ralph reacts to real GitHub events instead of polling on a blind
+interval — see [Push-Triggered Rounds](#push-triggered-rounds-vs-polling) below. `--interval`
+still applies as the fallback whenever push isn't configured or its connection fails.
+
 This runs as a standalone local process (not inside Copilot) that:
 - Checks GitHub every N minutes for untriaged squad work
 - Auto-triages issues based on team roles and keywords
@@ -224,6 +228,25 @@ All new features are **opt-in** and disabled by default. Existing `squad watch` 
 | `--cleanup` | Auto-clear scratch files, archive old logs (every 10 rounds) | `squad watch --cleanup` |
 | `--channel-routing` | Route notifications to specific Teams channels (requires `.squad/teams-channels.json`) | `squad watch --channel-routing` |
 
+#### Push-Triggered Rounds (vs. Polling)
+
+| Flag / Env Var | Description | Example |
+|------|-------------|---------|
+| `ABLY_API_KEY` (env var, never a flag) | Subscribe-scoped [Ably](https://ably.com) key. When set and the connection succeeds, `--interval` polling does not run at all — see below. | `ABLY_API_KEY="appid.keyid:secret" squad watch` |
+| `--ably-channel NAME` | Channel to subscribe to (default `squad-watch`) | `squad watch --ably-channel my-repo-progress` |
+
+By default, `squad watch` checks GitHub on a blind timer — every tick costs whatever the
+round itself costs (API calls, rate-limit budget) whether or not anything actually changed.
+Setting `ABLY_API_KEY` switches Ralph to push-triggered rounds instead: `squad-ably-relay.yml`
+(installed automatically by `init`/`upgrade`, same mechanism as the heartbeat workflow below)
+publishes real issue/PR events to Ably the moment they happen, as long as the repo has an
+`ABLY_API_KEY_PUBLISH` secret configured — set that secret and Ralph reacts instantly instead
+of waiting for the next poll. This is **never a
+permanent second layer alongside `--interval` polling** — when the Ably connection succeeds,
+the interval timer never starts; polling only ever runs as the fallback (no key configured,
+or the connection failed). Nothing about push notifications is required — a repo that never
+sets `ABLY_API_KEY` gets exactly the interval-polling behavior `squad watch` has always had.
+
 ### Common Workflows
 **Basic triage + work execution:**
 ```bash
@@ -287,7 +310,7 @@ squad watch --execute                       # full work monitor (auto-detects pl
 | Layer | When | How |
 |-------|------|-----|
 | **In-session** | You're at the keyboard | "Ralph, go" — active loop while work exists |
-| **Local watchdog** | You're away but machine is on | `squad watch --interval 10` (triage) or `squad watch --execute` (full monitor) |
+| **Local watchdog** | You're away but machine is on | `squad watch --interval 10` (triage/polling) or `ABLY_API_KEY=... squad watch` (triage/push-triggered) or `squad watch --execute` (full monitor) |
 | **Cloud heartbeat** | Event-driven | `squad-heartbeat.yml` GitHub Actions events (issue close, PR merge, manual dispatch) |
 
 ## Ralph's Board View
@@ -306,7 +329,7 @@ The heartbeat workflow (`squad-heartbeat.yml`) is automatically installed during
 - **On issue close**: Checks for next item in backlog
 - **On PR merge**: Checks for follow-up work
 - **On manual dispatch**: Trigger via GitHub Actions UI
-For persistent polling when you're away, use `squad watch` locally — it polls at your chosen interval without consuming GitHub Actions minutes.
+For persistent local monitoring when you're away, use `squad watch` — it either polls at your chosen interval (no GitHub Actions minutes consumed) or, with `ABLY_API_KEY` set, reacts to push events the moment they happen instead of waiting for the next poll — see [Push-Triggered Rounds](#push-triggered-rounds-vs-polling) above. `squad-ably-relay.yml` (installed the same way as this heartbeat workflow) is what feeds that push path; unlike the heartbeat, it only runs and consumes minutes if `ABLY_API_KEY_PUBLISH` is actually configured as a repo secret.
 ## Notes
 - Ralph is session-scoped — his state (active/idle, round count, stats) resets each session
 - Ralph appears on the roster like Scribe: `| Ralph | Work Monitor | — | 🔄 Monitor |`

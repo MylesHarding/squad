@@ -1,0 +1,48 @@
+name: Squad Ably Relay
+# ⚠️ SYNC: This workflow is maintained in 4 locations. Changes must be applied to all:
+#   - .squad-templates/workflows/squad-ably-relay.yml (canonical source)
+#   - templates/workflows/squad-ably-relay.yml (root mirror)
+#   - packages/squad-cli/templates/workflows/squad-ably-relay.yml (CLI package mirror)
+#   - .github/workflows/squad-ably-relay.yml (this repo's own active copy)
+# Run 'node scripts/sync-templates.mjs --sync' to sync the first three; `squad upgrade`
+# installs this file into an adopting repo's .github/workflows/ from the CLI package copy.
+#
+# Republishes this repo's issue/PR events to Ably in realtime, so `squad watch` (Ralph) can
+# react to them instantly instead of polling on a blind interval. Optional — a repo that
+# never installs this, or never sets ABLY_API_KEY_PUBLISH, simply gets watch mode's existing
+# interval-polling behavior; nothing here is required for watch mode to work. See
+# packages/squad-cli/src/cli/commands/watch/ably-trigger.ts for the subscribe side.
+#
+# No external relay service, no webhook registration, no signature verification needed —
+# GitHub Actions is already triggered natively by GitHub's own eventing.
+
+on:
+  issues:
+  pull_request:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.ABLY_API_KEY_PUBLISH != '' }}
+    steps:
+      - name: Build payload
+        id: payload
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+        run: |
+          data="$(jq -nc \
+            --arg entity "$EVENT_NAME" \
+            --arg action "$ACTION" \
+            --argjson number "$NUMBER" \
+            '{entity: $entity, action: $action, number: $number}')"
+          echo "data-json=$data" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to Ably
+        uses: MylesHarding/squad/.github/actions/ably-publish@main
+        with:
+          ably-api-key: ${{ secrets.ABLY_API_KEY_PUBLISH }}
+          channel: ${{ vars.SQUAD_ABLY_CHANNEL || 'squad-watch' }}
+          event-name: squad-watch-trigger
+          data-json: ${{ steps.payload.outputs.data-json }}
