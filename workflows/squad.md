@@ -202,6 +202,9 @@ Ably channel `squad-progress` — for a dashboard or other live monitor watching
 show what's happening before the final comment/PR lands, not for anything this workflow
 itself depends on. Call it with `event-name: "squad-progress"` and `data-json` containing at
 minimum `{"mode": "{mode}", "origin_issue": {issue_number}, "status": "{short status}"}`.
+For Implement and Plan-Activate modes, include an optional `"agent": "{agent_key}"` field
+(e.g. `"Infra"`, `"Lead"`) to carry the routed Squad persona for that dispatch or created
+task — downstream consumers use this to render real persona names in realtime UI.
 Reasonable moments to call it: right after posting the mode's acknowledgment comment, at the
 start of each major step in a multi-step mode (Epic Dispatch's per-child loop, Plan
 Activate's per-issue creation loop), and once more just before the final deliverable posts.
@@ -511,7 +514,7 @@ per selected child, and only report a child as dispatched after the tool returns
 success.
 
 After each successful dispatch, best-effort call `publish-progress` (see Progress Updates
-above) with `data-json` like `{"mode": "implement", "origin_issue": {epic_number}, "status": "dispatched child #{child-issue-number}"}`.
+above) with `data-json` like `{"mode": "implement", "origin_issue": {epic_number}, "status": "dispatched child #{child-issue-number}", "agent": "{agent}"}` where `{agent}` is extracted from the child issue's `squad:{agent}` label (if present; this field is optional).
 
 Post a comment on the epic listing the dispatched children, blocked children,
 children with existing implementation pull requests, and any ready children
@@ -989,7 +992,7 @@ Root → Epics → Tasks. Phase-specific: filter to matching phase heading.
 
 This loop can run long (up to 50 issues). After each verified task, best-effort call
 `publish-progress` with `data-json` like `{"mode": "plan-activate", "origin_issue":
-{root_issue_number}, "status": "created task {N} of {M}: #{issue_number}"}` — gives a live
+{root_issue_number}, "status": "created task {N} of {M}: #{issue_number}", "agent": "{agent}"}` where `{agent}` is extracted from the task spec (the same value used to compose the task's `squad:{agent}` label on line 997; this field is optional) — gives a live
 monitor something to show during a run that otherwise produces no visible output until the
 very end.
 
