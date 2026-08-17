@@ -163,6 +163,12 @@ The remaining instructions apply only to `workflow_dispatch`.
    `.squad/`.
 4. Run the smallest existing build, test, and lint commands covering the change.
 5. Review the final diff against the issue acceptance criteria.
+6. Before claiming any criterion met, check your own assumptions: if the issue text asserts
+   some capability "already exists" or is available for reuse, verify that directly in the
+   checked-out repository rather than trusting the issue's word for it — issue text can be
+   stale or simply wrong about what's actually present on the branch you built from. If a
+   capability an acceptance criterion depends on genuinely isn't there, that criterion is not
+   met — don't check it off, and don't proceed to the "Closes #N" step below for it.
 
 ## Open Pull Request
 

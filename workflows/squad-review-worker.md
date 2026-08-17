@@ -40,7 +40,7 @@ an implementer grading its own homework is not adversarial. This workflow is tha
 independent check. It never edits code and never opens or merges anything — its only
 output is a verdict comment.
 
-**Two real incidents motivate this** (from a sibling project using the same pattern,
+**Three real incidents motivate this** (from a sibling project using the same pattern,
 confirmed by direct diff inspection, not assumption):
 
 1. A PR closed an issue whose acceptance criteria explicitly required a user-facing UI, and
@@ -53,6 +53,13 @@ confirmed by direct diff inspection, not assumption):
    "refactor" shipped zero actual change to the file it was supposed to shrink, and left dead
    code behind. A reviewer who only confirms "does new code exist matching the AC's
    description" would have missed this; the code technically existed.
+3. An implementer was told (incorrectly, by its own task brief) that a helper function it
+   needed already existed in the codebase. It correctly discovered that the function was not
+   actually present on the branch it built from, and said so honestly in its own summary — but
+   it had still framed the PR as complete, with an acceptance-criteria item ("fires on the
+   relevant state transition") that could not possibly be satisfied without that missing
+   piece. A reviewer who only checks "does the PR's own narrative sound complete" would have
+   missed the contradiction between the admitted gap and the implied completion.
 
 ## Gather context
 
@@ -106,6 +113,27 @@ file was created and never actually wired into anything. Check for real:
    file supposedly replaced still exists there, unchanged, the extraction achieved nothing
    even if the new file *is* wired in somewhere trivial (e.g. only from its own test).
 
+## Review: false-completion check (claims done while admitting or hiding a gap)
+
+A PR can fail this check even if every AC item's code technically exists, if the PR itself
+contradicts its own claim of completion:
+
+1. Read the PR body and its commit messages (not just the diff) for language that admits
+   incompleteness — phrases like "ready to wire," "once X lands," "depends on a concurrent
+   change," "in a follow-up," "not yet integrated," "TODO," or similar. If any such language
+   appears anywhere alongside a claim of closing the issue (a `Closes #N` line, or the PR
+   description asserting all criteria are met), that is a direct contradiction — a PR cannot
+   both admit unfinished work and claim the issue is closed. Treat this as an automatic
+   **fail** for the affected criteria, regardless of what the rest of the diff shows.
+2. For any acceptance-criteria item that requires calling into, wiring up, or reacting to a
+   specific existing capability (a function, config value, hook point, or similar) that the
+   issue text or the PR's own description asserts "already exists" elsewhere in the codebase:
+   verify that capability is actually present and reachable from this PR's merge-base (the
+   commit history the branch was actually built from) — not merely asserted by the issue or
+   the PR's own prose. If it genuinely isn't there (check the repository directly; don't take
+   the PR's word for it), the criterion depending on it is **not met**, independent of how
+   well-built everything else in the PR is.
+
 ## Post the verdict
 
 Post exactly one comment on the PR (never a `pull_request_review`, only a plain comment —
@@ -123,11 +151,13 @@ this review ran without parsing prose:
 `VERDICT` is `pass` or `fail`. `TIMESTAMP` is ISO 8601 UTC.
 
 - **All criteria met**: `pass`. List each criterion with its one-line evidence.
-- **Any criterion not met or partially met** (including any dead extraction found): `fail`.
-  List every unmet/partially-met criterion with what was required and what the diff actually
-  shows, citing file:line evidence. List dead extractions separately and explicitly labeled
-  as such, not folded into a generic "not met" line — the fix for "wire this in or delete it"
-  differs from the fix for "implement the missing behavior."
+- **Any criterion not met or partially met** (including any dead extraction or
+  false-completion contradiction found): `fail`. List every unmet/partially-met criterion
+  with what was required and what the diff actually shows, citing file:line evidence. List
+  dead extractions and false-completion contradictions separately and explicitly labeled as
+  such, not folded into a generic "not met" line — the fix for "wire this in or delete it"
+  differs from "implement the missing behavior," which differs again from "stop claiming
+  this is done, or actually finish it."
 
 Never edit the pull request, never comment more than once per invocation (a `synchronize`
 re-run replaces the review, it doesn't append to a growing thread), and never attempt to
