@@ -15,6 +15,8 @@ import { RetroCapability } from './retro.js';
 import { DecisionHygieneCapability } from './decision-hygiene.js';
 import { CleanupCapability } from './cleanup.js';
 import { NotesPromoteCapability } from './notes-promote.js';
+import { ScribeCapability } from './scribe.js';
+import { RaiCapability } from './rai.js';
 
 /** Create a registry pre-loaded with all built-in capabilities. */
 export function createDefaultRegistry(): CapabilityRegistry {
@@ -31,5 +33,7 @@ export function createDefaultRegistry(): CapabilityRegistry {
   registry.register(new DecisionHygieneCapability());
   registry.register(new CleanupCapability());
   registry.register(new NotesPromoteCapability());
+  registry.register(new ScribeCapability());
+  registry.register(new RaiCapability());
   return registry;
 }
