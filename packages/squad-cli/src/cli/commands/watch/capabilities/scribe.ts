@@ -41,6 +41,7 @@ export class ScribeCapability implements WatchCapability {
       const teamRoot = context.teamRoot;
       const inboxDir = path.join(teamRoot, '.squad', 'decisions', 'inbox');
       const decisionsFile = path.join(teamRoot, '.squad', 'decisions.md');
+      const now = new Date().toISOString();
 
       // Check if there are any pending decisions to merge
       let hasPendingDecisions = false;
@@ -66,12 +67,12 @@ export class ScribeCapability implements WatchCapability {
         `2. Deduplicate decisions.md by finding exact-match headings and keeping only the first.\n\n` +
         `3. For any newly merged decision affecting other agents, append updates to agent histories:\n` +
         `   - For each agent in .squad/agents/, if a decision affects them,\n` +
-        `   - Append: "📌 Team update ({CURRENT_DATETIME}): {summary} — decided by {Name}"\n` +
+        `   - Append: "📌 Team update (${now}): {summary} — decided by {Name}"\n` +
         `   - Use squad_state_append("agents/{agent}/history.md", "\\n\\n{update}")\n\n` +
         `4. If decisions.md exceeds size limits, apply archival:\n` +
         `   - If >20KB: archive entries older than 30 days to .squad/archive/\n` +
         `   - If still >50KB: archive entries older than 7 days\n` +
-        `   - Create archive entries with timestamps: {CURRENT_DATETIME}-archived-decisions.md\n\n` +
+        `   - Create archive entries with timestamps: ${now}-archived-decisions.md\n\n` +
         `5. Call squad_state_health() to verify persistence, then exit silently (never speak to user).\n\n` +
         `TEAM_ROOT: ${teamRoot}`;
 
