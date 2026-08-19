@@ -686,6 +686,9 @@ describe('ToolRegistry state tools with git-native backend', () => {
     await expect(del.handler({ key: 'agents/data/charter.md' })).resolves.toMatchObject({ resultType: 'failure' });
     await expect(write.handler({ key: 'skills/reviewer/SKILL.md', content: 'bad' })).resolves.toMatchObject({ resultType: 'failure' });
     await expect(write.handler({ key: '.squadata/runtime-check.md', content: 'bad' })).resolves.toMatchObject({ resultType: 'failure' });
+    // Agent policy files are static config and must not be mutated
+    await expect(write.handler({ key: 'rai/policy.md', content: 'bad' })).resolves.toMatchObject({ resultType: 'failure' });
+    await expect(append.handler({ key: 'fact-checker/policy.md', content: 'bad' })).resolves.toMatchObject({ resultType: 'failure' });
     expect(backend.read('config.json')).toBeUndefined();
     expect(backend.read('team.md')).toBeUndefined();
   });
@@ -703,12 +706,17 @@ describe('ToolRegistry state tools with git-native backend', () => {
     await expect(write.handler({ key: 'sessions/session-1/state.md', content: 'ok\n' })).resolves.toMatchObject({ resultType: 'success' });
     await expect(write.handler({ key: '.scratch/notes.md', content: 'ok\n' })).resolves.toMatchObject({ resultType: 'success' });
     await expect(append.handler({ key: 'agents/data/history.md', content: 'Learned via state tools.\n' })).resolves.toMatchObject({ resultType: 'success' });
+    // Agent audit-trail.md files are mutable runtime state
+    await expect(write.handler({ key: 'rai/audit-trail.md', content: '## Audit Trail\n' })).resolves.toMatchObject({ resultType: 'success' });
+    await expect(append.handler({ key: 'fact-checker/audit-trail.md', content: '- Processed item X\n' })).resolves.toMatchObject({ resultType: 'success' });
     await expect(del.handler({ key: '.squad/sessions/session-1/state.md' })).resolves.toMatchObject({ resultType: 'success' });
     await expect(health.handler({})).resolves.toMatchObject({ resultType: 'success' });
 
     expect(backend.read('decisions.md')).toBe('# Decisions\n');
     expect(backend.read('.scratch/notes.md')).toBe('ok\n');
     expect(backend.read('agents/data/history.md')).toBe('Learned via state tools.\n');
+    expect(backend.read('rai/audit-trail.md')).toBe('## Audit Trail\n');
+    expect(backend.read('fact-checker/audit-trail.md')).toBe('- Processed item X\n');
     expect(backend.read('sessions/session-1/state.md')).toBeUndefined();
   });
 

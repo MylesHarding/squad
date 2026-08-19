@@ -260,6 +260,7 @@ function validateMutableStateToolKey(key: string): void {
     key === 'decisions.md' ||
     key.startsWith('decisions/inbox/') ||
     /^agents\/[a-zA-Z0-9_-]+\/history\.md$/.test(key) ||
+    /^[a-zA-Z0-9_-]+\/audit-trail\.md$/.test(key) ||
     key.startsWith('log/') ||
     key.startsWith('orchestration-log/') ||
     key.startsWith('sessions/') ||
