@@ -18,6 +18,27 @@ function parseJson<T>(raw: string): T {
   }
 }
 
+/**
+ * Shape of ntsy-forge's `GET /api/backlog` (`tools/dashboard/src/ingestion/backlog-poller.ts`'s
+ * `BacklogSnapshot`) — the only fields this adapter reads. Deliberately narrow: that
+ * endpoint's issue entries carry no `body` and its PR entries carry no `baseRefName`/
+ * `reviewDecision`/`author`, so only `listWorkItems()` (issues) is wired to it below —
+ * `listPullRequests()` doesn't have enough fields available to map faithfully and stays on
+ * the `gh`-based path unconditionally. `getWorkItem()` (single-issue detail, not list-scale
+ * traffic) also stays direct, since it's the one caller that actually needs `body`.
+ */
+interface CachedBacklogIssue {
+  number: number;
+  title: string;
+  labels: string[];
+  assignees: string[];
+}
+interface CachedBacklogSnapshot {
+  issues: CachedBacklogIssue[];
+}
+
+const BACKLOG_CACHE_FETCH_TIMEOUT_MS = 5_000;
+
 export class GitHubAdapter implements PlatformAdapter {
   readonly type: PlatformType = 'github';
 
@@ -34,7 +55,53 @@ export class GitHubAdapter implements PlatformAdapter {
     return execFileSync('gh', args, EXEC_OPTS).trim();
   }
 
+  /**
+   * Cache-first read path for `listWorkItems()`, additive and env-var-gated — this repo's
+   * `gh`-shelling behavior is unchanged when unset. `SQUAD_BACKLOG_CACHE_URL` points at a
+   * centralized issue/PR cache (e.g. ntsy-forge's `/api/backlog`), avoiding an independent
+   * `gh issue list` call every watch round on top of whatever's already polling that same
+   * repo. `SQUAD_BACKLOG_CACHE_REPO` must exactly match `this.repoFlag` — the cache response
+   * itself carries no repo identifier, so without this check a cache URL left set while
+   * watching a *different* repo would silently return the wrong repo's issues. Any failure
+   * (env var unset, mismatch, network error, bad JSON, timeout) returns `null` and the caller
+   * falls back to the existing `gh`-based path — never a hard failure.
+   */
+  private async fetchCachedWorkItems(): Promise<WorkItem[] | null> {
+    const cacheUrl = process.env['SQUAD_BACKLOG_CACHE_URL'];
+    const cacheRepo = process.env['SQUAD_BACKLOG_CACHE_REPO'];
+    if (!cacheUrl || cacheRepo !== this.repoFlag) return null;
+
+    try {
+      const res = await fetch(cacheUrl, { signal: AbortSignal.timeout(BACKLOG_CACHE_FETCH_TIMEOUT_MS) });
+      if (!res.ok) return null;
+      const snapshot = await res.json() as CachedBacklogSnapshot;
+      if (!Array.isArray(snapshot.issues)) return null;
+
+      return snapshot.issues.map((issue) => ({
+        id: issue.number,
+        title: issue.title,
+        // /api/backlog only ever holds open issues (backlog-poller.ts filters to OPEN
+        // before publishing), so this is not an assumption — the source data guarantees it.
+        state: 'open',
+        tags: issue.labels,
+        assignedTo: issue.assignees[0],
+        url: `https://github.com/${this.repoFlag}/issues/${issue.number}`,
+      }));
+    } catch {
+      return null;
+    }
+  }
+
   async listWorkItems(options: { tags?: string[]; state?: string; limit?: number }): Promise<WorkItem[]> {
+    const cached = await this.fetchCachedWorkItems();
+    if (cached) {
+      let result = cached;
+      if (options.state) result = result.filter((w) => w.state === options.state!.toLowerCase());
+      if (options.tags?.length) result = result.filter((w) => options.tags!.every((t) => w.tags.includes(t)));
+      if (options.limit) result = result.slice(0, options.limit);
+      return result;
+    }
+
     const args = ['issue', 'list', '--repo', this.repoFlag, '--json', 'number,title,state,labels,assignees,url'];
     if (options.state) args.push('--state', options.state);
     if (options.limit) args.push('--limit', String(options.limit));

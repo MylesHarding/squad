@@ -574,6 +574,7 @@ async function main(): Promise<void> {
       : undefined;
 
     const execute = args.includes('--execute') ? true : undefined;
+    const once = args.includes('--once') ? true : undefined;
 
     const verbose = args.includes('--verbose') || args.includes('-v');
 
@@ -698,6 +699,7 @@ async function main(): Promise<void> {
     const config = loadWatchConfig(getSquadStartDir(), {
       interval,
       execute,
+      once,
       maxConcurrent,
       timeout,
       copilotFlags,

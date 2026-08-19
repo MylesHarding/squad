@@ -586,6 +586,7 @@ function legacyToConfig(options: WatchOptions): WatchConfig {
   return {
     interval: options.intervalMinutes,
     execute: options.execute ?? false,
+    once: false,
     maxConcurrent: options.maxConcurrent ?? 1,
     timeout: options.issueTimeoutMinutes ?? 30,
     // Default to --yolo when execute mode is active — copilot CLI hangs in
@@ -815,7 +816,11 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
   const modeTag = config.execute ? ` ${BOLD}(Execute)${RESET}` : '';
   const platformTag = ` [${adapter.type}]`;
   console.log(`\n${BOLD}🔄 Ralph — Watch Mode${RESET}${modeTag}${platformTag}`);
-  console.log(`${DIM}Ctrl+C to stop. Falls back to polling every ${interval} minute(s) unless ABLY_API_KEY is set for push-triggered rounds.${RESET}`);
+  console.log(
+    config.once
+      ? `${DIM}--once: running a single round then exiting.${RESET}`
+      : `${DIM}Ctrl+C to stop. Falls back to polling every ${interval} minute(s) unless ABLY_API_KEY is set for push-triggered rounds.${RESET}`,
+  );
   if (config.execute && config.copilotFlags) {
     console.log(`${DIM}Copilot flags: ${config.copilotFlags}${RESET}`);
   }
@@ -995,6 +1000,22 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
   // Run immediately, then push-triggered (Ably) if configured, falling back to interval
   // polling otherwise. Never both at once — see ably-trigger.ts.
   await executeRound();
+
+  // --once: the caller is its own trigger (e.g. an external change-detection hook that
+  // spawns a fresh `squad watch --once` per trigger, per claude/#611) — return right after
+  // the one real round instead of ever setting up the interval/Ably loop below. Mirrors
+  // shutdown()'s own cleanup (below) minus the parts that only apply once that loop has
+  // actually started (clearInterval/ablyTrigger.stop/signal-handler teardown).
+  if (config.once) {
+    await eventBus.emit({
+      type: 'session:destroyed', sessionId: monitorSessionId,
+      agentName: 'Ralph', payload: null, timestamp: new Date(),
+    });
+    await monitor.stop();
+    saveCBState(squadDirInfo.path, cbState);
+    logStream?.end();
+    return;
+  }
 
   async function guardedRound(): Promise<void> {
     if (roundInProgress) return;
