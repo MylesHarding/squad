@@ -465,6 +465,22 @@ function saveCBState(squadDir: string, state: CircuitBreakerState): void {
   );
 }
 
+/** Serializes housekeeping capability results to a JSON file so a `--once` caller (an
+ * external change-detection hook spawning `squad watch --once` per trigger) can read back
+ * what each capability actually did this round — `runPhase()` itself only ever logs a
+ * capability's `summary` on failure, discarding it on success, so nothing durable otherwise
+ * survives this process exiting. Overwritten every round; not meant to accumulate history. */
+function saveWatchSummary(squadDir: string, results: Map<string, CapabilityResult>): void {
+  const summary: Record<string, { success: boolean; summary: string }> = {};
+  for (const [name, result] of results) {
+    summary[name] = { success: result.success, summary: result.summary };
+  }
+  storage.writeSync(
+    path.join(squadDir, '.last-watch-summary.json'),
+    JSON.stringify(summary, null, 2),
+  );
+}
+
 // ── Capability Phase Runner ──────────────────────────────────────
 
 async function runPhase(
@@ -949,7 +965,10 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
     }
 
     // Phase 4: housekeeping (monitoring, retro, decision hygiene)
-    await runPhase('housekeeping', enabledCapabilities, roundContext, config);
+    const housekeepingResults = await runPhase('housekeeping', enabledCapabilities, roundContext, config);
+    if (config.once) {
+      saveWatchSummary(squadDirInfo.path, housekeepingResults);
+    }
 
     await eventBus.emit({
       type: 'agent:milestone', sessionId: monitorSessionId,
