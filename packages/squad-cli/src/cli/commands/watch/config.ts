@@ -17,6 +17,8 @@ export type DispatchMode = 'task' | 'fleet' | 'hybrid';
 export interface WatchConfig {
   interval: number;
   execute: boolean;
+  /** Run exactly one round then exit, instead of polling/Ably-listening forever. For callers that trigger watch themselves (e.g. an external change-detection hook) rather than needing watch's own interval loop. */
+  once: boolean;
   maxConcurrent: number;
   timeout: number;
   copilotFlags?: string;
@@ -57,6 +59,7 @@ export interface WatchConfig {
 const DEFAULTS: WatchConfig = {
   interval: 10,
   execute: false,
+  once: false,
   maxConcurrent: 1,
   timeout: 30,
   dispatchMode: undefined,
@@ -93,6 +96,7 @@ export function loadWatchConfig(
   const merged: WatchConfig = {
     interval: cliOverrides.interval ?? fileConfig.interval ?? DEFAULTS.interval,
     execute: cliOverrides.execute ?? fileConfig.execute ?? DEFAULTS.execute,
+    once: cliOverrides.once ?? fileConfig.once ?? DEFAULTS.once,
     maxConcurrent: cliOverrides.maxConcurrent ?? fileConfig.maxConcurrent ?? DEFAULTS.maxConcurrent,
     timeout: cliOverrides.timeout ?? fileConfig.timeout ?? DEFAULTS.timeout,
     copilotFlags: cliOverrides.copilotFlags ?? fileConfig.copilotFlags ?? DEFAULTS.copilotFlags,
@@ -130,6 +134,7 @@ function normalizeFileConfig(raw: Record<string, unknown>): Partial<WatchConfig>
 
   if (typeof raw['interval'] === 'number') result.interval = raw['interval'];
   if (typeof raw['execute'] === 'boolean') result.execute = raw['execute'];
+  if (typeof raw['once'] === 'boolean') result.once = raw['once'];
   if (typeof raw['maxConcurrent'] === 'number') result.maxConcurrent = raw['maxConcurrent'];
   if (typeof raw['timeout'] === 'number') result.timeout = raw['timeout'];
   if (typeof raw['copilotFlags'] === 'string') result.copilotFlags = raw['copilotFlags'];
@@ -163,7 +168,7 @@ function normalizeFileConfig(raw: Record<string, unknown>): Partial<WatchConfig>
 
   // Everything else is a capability key
   const caps: Record<string, boolean | Record<string, unknown>> = {};
-  const reserved = new Set(['interval', 'execute', 'maxConcurrent', 'timeout', 'copilotFlags', 'agentCmd', 'verbose', 'dispatchMode', 'logFile', 'authUser', 'notifyLevel', 'overnightStart', 'overnightEnd', 'sentinelFile', 'stateBackend', 'ablyChannel']);
+  const reserved = new Set(['interval', 'execute', 'once', 'maxConcurrent', 'timeout', 'copilotFlags', 'agentCmd', 'verbose', 'dispatchMode', 'logFile', 'authUser', 'notifyLevel', 'overnightStart', 'overnightEnd', 'sentinelFile', 'stateBackend', 'ablyChannel']);
   for (const [key, value] of Object.entries(raw)) {
     if (reserved.has(key)) continue;
     if (typeof value === 'boolean' || (typeof value === 'object' && value !== null && !Array.isArray(value))) {

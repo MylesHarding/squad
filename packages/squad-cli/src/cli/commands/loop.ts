@@ -328,6 +328,7 @@ export async function runLoop(dest: string, options: LoopConfig): Promise<void> 
   const watchConfig: WatchConfig = {
     interval,
     execute: false,
+    once: false,
     maxConcurrent: 1,
     timeout: timeoutMinutes,
     copilotFlags: options.copilotFlags,

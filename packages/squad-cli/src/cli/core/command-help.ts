@@ -377,6 +377,7 @@ function printWatchHelp(name: 'triage' | 'watch', version: string): void {
   console.log(`Default: checks every 10 minutes (Ctrl+C to stop).\n`);
   console.log(`Core flags:`);
   console.log(`  ${BOLD}--execute${RESET}                   Spawn agents to work on issues`);
+  console.log(`  ${BOLD}--once${RESET}                      Run a single round then exit (no polling/Ably loop)`);
   console.log(`  ${BOLD}--copilot-flags "..."${RESET}       Extra flags for Copilot CLI`);
   console.log(`  ${BOLD}--max-concurrent N${RESET}          Parallel issue limit (default 1)`);
   console.log(`  ${BOLD}--timeout N${RESET}                 Max minutes per issue (default 30)`);
