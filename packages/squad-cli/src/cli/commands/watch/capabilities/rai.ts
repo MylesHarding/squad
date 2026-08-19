@@ -43,6 +43,7 @@ export class RaiCapability implements WatchCapability {
   async execute(context: WatchContext): Promise<CapabilityResult> {
     try {
       const teamRoot = context.teamRoot;
+      const now = new Date().toISOString();
 
       // Build Rai's spawn prompt
       const prompt =
@@ -57,7 +58,7 @@ export class RaiCapability implements WatchCapability {
         `   - ADVISORY CONCERNS (🟡): PII, bias, inclusive language, security posture, accessibility\n\n` +
         `4. If any findings exist, append a verdict entry to .squad/rai/audit-trail.md with:\n` +
         `   - Traffic-light emoji (🟢 green, 🟡 yellow, 🔴 red)\n` +
-        `   - Timestamp: {CURRENT_DATETIME}\n` +
+        `   - Timestamp: ${now}\n` +
         `   - Summary (1 line): what was checked\n` +
         `   - Findings (if any): each as a bullet\n` +
         `   - Remediation path (if critical violations found)\n\n` +
