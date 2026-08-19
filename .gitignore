@@ -30,6 +30,7 @@ docs/tests/screenshots/
 .squad/.first-run
 .squad/.watch-pids
 .squad/.cache/
+.squad/.last-watch-summary.json
 
 # Images folder (root only — don't ignore docs/public/images/)
 /images/
